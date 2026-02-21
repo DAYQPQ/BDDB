@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>　</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body, html {
+      height:100%;
+      background:#ffffff;
+      overflow:hidden;
+      cursor:pointer;
+      user-select:none;
+    }
+    .center {
+      position:fixed;
+      inset:0;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+    .btn {
+      font-size:5.5rem;
+      font-weight:bold;
+      color:#fff;
+      background:#00cc44;
+      padding:60px 160px;
+      border:none;
+      border-radius:50px;
+      box-shadow:0 20px 50px rgba(0,200,80,0.6);
+      cursor:pointer;
+      transition:all 0.3s;
+    }
+    .btn:hover {
+      transform:scale(1.08) translateY(-10px);
+      box-shadow:0 30px 70px rgba(0,200,80,0.8);
+      background:#00b33c;
+    }
+    .btn:active {
+      transform:scale(0.94);
+    }
+    .playing {
+      background:#ff2222 !important;
+      animation:pulse 1.2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { transform:scale(1); }
+      50%     { transform:scale(1.08); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="center">
+    <button class="btn" id="trigger">CLICK</button>
+  </div>
+
+  <audio id="sound" loop preload="auto">
+    <source src="sound.mp3" type="audio/mpeg">
+  </audio>
+
+  <script>
+    const trigger = document.getElementById('trigger');
+    const audio = document.getElementById('sound');
+
+    let audioCtx = null;
+    let source = null;
+    let gainNode = null;
+    let isPlaying = false;
+
+    function initAudio() {
+      if (audioCtx) return;
+
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      source = audioCtx.createMediaElementSource(audio);
+      gainNode = audioCtx.createGain();
+      source.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      gainNode.gain.value = 1.6;  // 최대 증폭 (1.6배, 클리핑 주의 - 1.4\~1.8 사이로 테스트 추천)
+    }
+
+    function startPlayback() {
+      if (isPlaying) return;
+      initAudio();
+
+      audio.currentTime = 0;
+      audio.play().then(() => {
+        isPlaying = true;
+        trigger.classList.add('playing');
+        trigger.textContent = "ON";
+        trigger.style.pointerEvents = 'none';
+      }).catch(() => {});
+    }
+
+    trigger.addEventListener('click', startPlayback, { once: true });
+
+    // 백그라운드/탭 전환 시 재시도 & 유지
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && audio.paused && isPlaying) {
+        audio.play().catch(() => {});
+      } else if (document.visibilityState === 'hidden' && !audio.paused) {
+        // 일부 브라우저에서 hidden 시 자동 pause → 강제 resume 시도
+        setTimeout(() => {
+          if (audio.paused) audio.play().catch(() => {});
+        }, 300);
+      }
+    });
+
+    // 페이지 최소화/백그라운드 시 AudioContext 유지
+    window.addEventListener('blur', () => {
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+          if (!audio.paused) audio.play().catch(() => {});
+        });
+      }
+    });
+
+    // 모바일 터치 백업
+    document.addEventListener('touchstart', () => {
+      if (!isPlaying) {
+        initAudio();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+    }, { once: true, passive: true });
+
+    // 추가: AudioContext가 suspended 되면 resume
+    if (audioCtx) {
+      audioCtx.onstatechange = () => {
+        if (audioCtx.state === 'suspended' && isPlaying) {
+          audioCtx.resume();
+        }
+      };
+    }
+  </script>
+
+</body>
+</html>
